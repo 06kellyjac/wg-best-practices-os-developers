@@ -13,6 +13,7 @@ When compiling C or C++ code on compilers such as GCC and clang, turn on these f
 ~~~~sh
 -O2 -Wall -Wformat=2 -Wconversion -Wtrampolines -Werror \
 -D_FORTIFY_SOURCE=3 \
+-fno-delete-null-pointer-checks \
 -fstack-clash-protection -fstack-protector-strong \
 -Wl,-z,nodlopen -Wl,-z,nodump -Wl,-z,noexecstack -Wl,-z,noexecheap \
 -Wl,-z,relro -Wl,-z,now \
@@ -87,16 +88,17 @@ Table 1: Recommended compiler options that enable strictly compile-time checks.
 
 Table 2: Recommended compiler options that enable run-time protection mechanisms.
 
-| Compiler Flag                                                                             |            Supported by            | Description                                                                                  |
-|:----------------------------------------------------------------------------------------- |:----------------------------------:|:-------------------------------------------------------------------------------------------- |
-| [`-D_FORTIFY_SOURCE=3`](#-D_FORTIFY_SOURCE=3) <br/>(requires `-O1` or higher) | GCC 12.0<br/>Clang 9.0.0[^1]  | Fortify sources with compile- and run-time checks for unsafe libc usage and buffer overflows. See details for different levels of fortification. |
-| [`-fstack-clash-protection`](#-fstack-clash-protection)                                   |       GCC 8<br/>Clang 11.0.0       | Enable run-time checks for variable-size stack allocation validity                           |
-| [`-fstack-protector-strong`](#-fstack-protector-strong)                                   |     GCC 4.9.0<br/>Clang 5.0.0      | Enable run-time checks for stack-based buffer overflows                                      |
-| [`-Wl,-z,nodlopen`](#-Wl,-z,nodlopen)<br/>[`-Wl,-z,nodump`](#-Wl,-z,nodump)               |           Binutils 2.10            | Restrict `dlopen(3)` and `dldump(3)` calls to shared objects                                 |
-| [`-Wl,-z,noexecstack`](#-Wl,-z,noexecstack)<br/>[`-Wl,-z,noexecheap`](#-Wl,-z,noexecheap) |           Binutils 2.14            | Enable data execution prevention by marking stack and heap memory as non-executable          |
-| [`-Wl,-z,relro`](#-Wl,-z,relro)<br/>[`-Wl,-z,now`](#-Wl,-z,now)                           |           Binutils 2.15            | Mark relocation table entries resolved at load- time as read-only                            |
-| [`-fPIE -pie`](#-fPIE_-pie)                                                               |   Binutils 2.16<br/>Clang 5.0.0    | Build as position-independent executable.                                                    |
-| [`-fPIC -shared`](#-fPIC_-shared)                                                         | < Binutils 2.6<br/>Clang 5.0.0[^1] | Build as position-independent code.                                                          |
+| Compiler Flag                                                                             |            Supported by            | Description                                                                                                                                      |
+|:----------------------------------------------------------------------------------------- |:----------------------------------:|:--------------------------------------------------------------------------------------------                                                     |
+| [`-D_FORTIFY_SOURCE=3`](#-D_FORTIFY_SOURCE=3) <br/>(requires `-O1` or higher)             |    GCC 12.0<br/>Clang 9.0.0[^1]    | Fortify sources with compile- and run-time checks for unsafe libc usage and buffer overflows. See details for different levels of fortification. |
+| [`-fno-strict-overflow`](#-fno-strict-overflow)                                           |     GCC X.X.X<br/>Clang 3.0.0      | Enable run-time checks for integer overflows (and as a result checks for pointer overflows)                                                      |
+| [`-fstack-clash-protection`](#-fstack-clash-protection)                                   |       GCC 8<br/>Clang 11.0.0       | Enable run-time checks for variable-size stack allocation validity                                                                               |
+| [`-fstack-protector-strong`](#-fstack-protector-strong)                                   |     GCC 4.9.0<br/>Clang 5.0.0      | Enable run-time checks for stack-based buffer overflows                                                                                          |
+| [`-Wl,-z,nodlopen`](#-Wl,-z,nodlopen)<br/>[`-Wl,-z,nodump`](#-Wl,-z,nodump)               |           Binutils 2.10            | Restrict `dlopen(3)` and `dldump(3)` calls to shared objects                                                                                     |
+| [`-Wl,-z,noexecstack`](#-Wl,-z,noexecstack)<br/>[`-Wl,-z,noexecheap`](#-Wl,-z,noexecheap) |           Binutils 2.14            | Enable data execution prevention by marking stack and heap memory as non-executable                                                              |
+| [`-Wl,-z,relro`](#-Wl,-z,relro)<br/>[`-Wl,-z,now`](#-Wl,-z,now)                           |           Binutils 2.15            | Mark relocation table entries resolved at load- time as read-only                                                                                |
+| [`-fPIE -pie`](#-fPIE_-pie)                                                               |   Binutils 2.16<br/>Clang 5.0.0    | Build as position-independent executable.                                                                                                        |
+| [`-fPIC -shared`](#-fPIC_-shared)                                                         | < Binutils 2.6<br/>Clang 5.0.0[^1] | Build as position-independent code.                                                                                                              |
 
 [^1]: The implementation of `-D_FORTIFY_SOURCE={1,2,3}` in the GNU libc (glibc) relies heavily on implementation details within GCC. Clang implements its own style of fortified function calls (originally introduced for Android’s bionic libc) and but as of Clang / LLVM 14.0.6 incorrectly produces non-fortified calls to some glibc functions with `_FORTIFY_SOURCE` . Code set to be fortified with Clang will still compile, but may not always benefit from the fortified function variants in glibc. For more information see: Guelton, Serge. Toward _FORTIFY_SOURCE parity between Clang and GCC. Red Hat Developer.
  <https://developers.redhat.com/blog/2020/02/11/toward-_fortify_source-parity-between-clang-and-gcc> and
@@ -251,6 +253,58 @@ Both `_FORTIFY_SOURCE=1` and `_FORTIFY_SOURCE=2` are expected to have a negligib
 <https://developers.redhat.com/articles/2023/02/06/how-improve-application-security-using-fortifysource3>
 [^30]: Arrays of Length Zero
 <https://gcc.gnu.org/onlinedocs/gcc/extensions-to-the-c-language-family/arrays-of-length-zero.html>
+
+---
+
+### Force retention of integer overflow checks
+
+| Compiler Flag                                                 |       Supported by        | Description                                                                                 |
+|:------------------------------------------------------------- |:-------------------------:|:------------------------------------------------------------------------------------------- |
+| <span id="-fno-strict-overflow">`-fno-strict-overflow`</span> | GCC X.X.X<br/>Clang 3.0.0 | Enable run-time checks for integer overflows (and as a result checks for pointer overflows) |
+
+#### Synopsis
+
+In some cases the compiler may not generate code for a integer overflow check
+when the source code has such a check.
+In particular, this can happen if having a null pointer value would
+imply that undefined behavior could occur.
+This can (TODO review perf) improve performance if developers never make a mistake.
+However, if developers make a mistake, this elision
+can lead to surprising vulnerabilities, because it will cause code is run
+that presumes a pointer is not null even if it was expressly preceded
+by a check to see if the pointer was null.
+
+TODO Use or adapt examples in paper
+
+~~~~C
+TODO
+~~~~
+
+TODO: Explanation here
+
+The flag `-fno-strict-overflow` requires the compiler to generate the integer overflow check even in these cases.
+
+#### Performance implications
+
+TODO
+
+Note that the Linux kernel build process includes this flag.
+
+
+paper https://pdos.csail.mit.edu/papers/ub:apsys12.pdf
+
+Nobody has analyzed it further than that, afaik, mainly because they
+don't have discussions about whether it makes sense to lose 50% of
+their FP (FLOATING POINT) performance to do something none of *their* users ask them
+for (note our users may, of course, be different).  So they generally
+won't waste their cycles trying to figure out why something they
+aren't going to do would hurt them.
+
+https://lists.gnu.org/archive/html/autoconf-patches/2006-12/msg00149.html
+
+`-fwrapv` - There is a clear difference on a processor which does not use ordinary twos-complement arithmetic
+
+https://www.airs.com/blog/archives/120
 
 ---
 
